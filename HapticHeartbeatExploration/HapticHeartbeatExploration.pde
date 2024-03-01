@@ -345,9 +345,10 @@ int domainAdjustment = 4;
 float waveFormValue(float x, int functionSign){
   return Math.signum(functionSign * sin((PI * x)/2)) * sqrt(1 - (pow((acos(sin(PI*x - PI/2)))/PI, 2))); 
 }
-
-void animate(){
-  xr += displacement;
+float tick = 0;
+float heartbeatValue = 0;
+void AdvanceECG(){
+  /* xr += displacement;
   println(xr);
   if(xr  <= -0.5){
     sign = 1;
@@ -358,7 +359,12 @@ void animate(){
     displacement *= -1;
   }
 
-  yr = waveFormValue(domainAdjustment*xr, sign) * radius;  
+  yr = waveFormValue(domainAdjustment*xr, sign) * radius;   */
+
+  tick += 0.01;
+ // heartbeatValue = (sin(((tick)*4)) + sin(tick*16)/4) * 3 * (-(floor(sin(tick * 2)) + 0.1)) * (1 - floor(mod(sin(tick/1.5), 2))); 
+  heartbeatValue = (sin(((tick)*4)) + sin(tick*16)/4) * 3 * (-(floor(sin(tick * 2)) + 0.1)) * (1 - floor(sin(tick/1.5 % 2))); 
+
 }
 /* end draw section ****************************************************************************************************/
 
@@ -374,19 +380,19 @@ while(1==1) {
     // we check the loop is running at the desired speed (with 10% tolerance)
     if(timesincelastloop >= looptime*1000*1.1) {
       float freq = 1.0/timesincelastloop*1000000.0;
-        println("caution, freq droped to: "+freq + " kHz");        
+        //println("caution, freq droped to: "+freq + " kHz");        
     }
     else if(iter >= 1000) {
       float freq = 1000.0/(starttime-looptiming)*1000000.0;
-       println("loop running at "  + freq + " kHz");
+       //println("loop running at "  + freq + " kHz");
        iter=0;
        looptiming=starttime;
     }
     
     currentFrame++;
-    if(currentFrame - previousFrame > 20){
+    if(currentFrame - previousFrame > 3){
       previousFrame = currentFrame;      
-      animate(); 
+      AdvanceECG(); 
 
     }
 
@@ -412,9 +418,10 @@ while(1==1) {
       float yE = pixelsPerMeter * posEE.y;
       long timedif = System.nanoTime()-oldtime;
 
-      float dist_X = x_m-xE;
+      println(heartbeatValue);
+      float dist_X = heartbeatValue * random(-1,1); //x_m-xE;
       cumerrorx += dist_X*timedif*0.000000001;
-      float dist_Y = y_m-yE;
+      float dist_Y = heartbeatValue * random(-1,1); //y_m-yE;
       cumerrory += dist_Y*timedif*0.000000001;
       //println(dist_Y*k + " " +dist_Y*k);
       // println(timedif);
@@ -430,6 +437,7 @@ while(1==1) {
       }
     
     // Forces are constrained to avoid moving too fast
+      P = random(0,2);
   
       fEE.x = constrain(P*dist_X,-4,4) + constrain(I*cumerrorx,-4,4) + constrain(D*diffx,-8,8);
 
@@ -455,7 +463,7 @@ while(1==1) {
     renderingForce = false;
     long timetook=System.nanoTime()-timetaken;
     if(timetook >= 1000000) {
-    println("Caution, process loop took: " + timetook/1000000.0 + "ms");
+    //println("Caution, process loop took: " + timetook/1000000.0 + "ms");
     }
     else {
       while(System.nanoTime()-starttime < looptime*1000) {
