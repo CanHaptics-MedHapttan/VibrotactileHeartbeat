@@ -23,19 +23,14 @@ public class HapticHeartbeatExploration extends PApplet {
 
 /**
  **********************************************************************************************************************
- * @file       Lab04.pde
+ * @file       HapticHeartbeatExploration.pde
  * @author     Noami Catwell
  * @version    V1.0.0
- * @date       24-February-2024
- * @brief      PID with path tracing
- **********************************************************************************************************************
- * @attention
- *
- *
- **********************************************************************************************************************
+ * @date       01-March-2024
+ * @brief      PID Heartbeat
  */
  
-  /* library imports *****************************************************************************************************/ 
+/* library imports *****************************************************************************************************/ 
 
 
 
@@ -139,15 +134,13 @@ long timetaken= 0;
 
 // set loop time in usec (note from Antoine, 500 is about the limit of my computer max CPU usage)
 int looptime = 500;
-
+int heartRate = 5;
 
 /* graphical elements */
 PShape pGraph, joint, endEffector;
 PShape wall;
-PShape target;
 PFont f;
 /* end elements definition *********************************************************************************************/ 
-
 
 
 /* setup section *******************************************************************************************************/
@@ -158,88 +151,52 @@ public void setup(){
   /* size commented out by preprocessor */;
   
   /* GUI setup */
-    /* smooth commented out by preprocessor */;
+  /* smooth commented out by preprocessor */;
+
   cp5 = new ControlP5(this);
+    
   cp5.addTextlabel("Prop")
-                    .setText("Gain for P(roportional)")
-                    .setPosition(0,0)
-                    .setColorValue(color(255,0,0))
-                    .setFont(createFont("Georgia",20))
-                    ;
-  cp5.addKnob("P")
-               .setRange(0,2)
-               .setValue(0)
-               .setPosition(50,25)
-               .setRadius(50)
-               .setDragDirection(Knob.VERTICAL)
-               ;
-  cp5.addTextlabel("Int")
-                    .setText("Gain for I(ntegral)")
-                    .setPosition(0,125)
-                    .setColorValue(color(255,0,0))
-                    .setFont(createFont("Georgia",20))
-                    ;
-  cp5.addKnob("I")
-               .setRange(0,2)
-               .setValue(0)
-               .setPosition(50,150)
-               .setRadius(50)
-               .setDragDirection(Knob.VERTICAL)
-               ;
-  cp5.addTextlabel("Deriv")
-                    .setText("Gain for D(erivative)")
-                    .setPosition(0,250)
-                    .setColorValue(color(255,0,0))
-                    .setFont(createFont("Georgia",20))
-                    ;
-  cp5.addKnob("D")
-               .setRange(0,4)
-               .setValue(0)
-               .setPosition(50,275)
-               .setRadius(50)
-               .setDragDirection(Knob.VERTICAL)
-               ; 
-  cp5.addTextlabel("Deriv filt")
-                    .setText("Exponential filter for Diff")
-                    .setPosition(0,375)
-                    .setColorValue(color(255,0,0))
-                    .setFont(createFont("Georgia",20))
-                    ;  
-  cp5.addSlider("smoothing")
-     .setPosition(10,400)
-     .setSize(200,20)
-     .setRange(0,1)
-     .setValue(0.8f)
-     ;
-  cp5.addTextlabel("Loop time")
-                    .setText("Loop time")
-                    .setPosition(0,420)
-                    .setColorValue(color(255,0,0))
-                    .setFont(createFont("Georgia",20))
-                    ;  
-  cp5.addSlider("looptime")
-     .setPosition(10,450)
-     .setWidth(200)
-     .setRange(250,4000) // values can range from big to small as well
-     .setValue(500)
-     .setNumberOfTickMarks(16)
-     .setSliderMode(Slider.FLEXIBLE)
-     ;
-  cp5.addButton("RandomPosition")
-     .setValue(0)
-     .setPosition(10,500)
-     .setSize(200,50)
-     ;
-  cp5.addButton("ResetIntegrator")
-     .setValue(0)
-     .setPosition(10,560)
-     .setSize(200,50)
-     ;
-  cp5.addButton("ResetDevice")
-     .setValue(0)
-     .setPosition(10,620)
-     .setSize(200,50)
-     ;
+      .setText("Gain for P(roportional)")
+      .setPosition(0,250)
+      .setColorValue(color(255,0,0))
+      .setFont(createFont("Georgia",20))
+      ;  
+    cp5.addSlider("P") 
+      .setPosition(0,275)
+      .setSize(200,20)
+      .setRange(0,2)
+      .setValue(1)
+      ;
+
+
+
+    cp5.addTextlabel("Frame delay")
+      .setText("Heart rate)")
+      .setPosition(0,375)
+      .setColorValue(color(255,0,0))
+      .setFont(createFont("Georgia",20))
+      ;  
+    cp5.addSlider("heartRate") 
+      .setPosition(10,400)
+      .setSize(200,20)
+      .setRange(1,20)
+      .setValue(5)
+      ;
+    cp5.addTextlabel("Loop time")
+      .setText("Loop time")
+      .setPosition(0,420)
+      .setColorValue(color(255,0,0))
+      .setFont(createFont("Georgia",20))
+      ;  
+    cp5.addSlider("looptime")
+      .setPosition(10,450)
+      .setSize(200,20)
+      .setRange(250,4000)
+      .setValue(500)
+      .setNumberOfTickMarks(16)
+      .setSliderMode(Slider.FLEXIBLE)
+      ;
+
 
   /* device setup */
   
@@ -264,8 +221,7 @@ public void setup(){
   widgetOne.add_encoder(1, CCW, 241, 10752, 2);
   widgetOne.add_encoder(2, CW, -61, 10752, 1);
   
-  widgetOne.device_set_parameters();
-    
+  widgetOne.device_set_parameters();    
   
   /* visual elements setup */
   background(0);
@@ -274,80 +230,17 @@ public void setup(){
   /* create pantagraph graphics */
   create_pantagraph();
   
-  
-  target = createShape(ELLIPSE, 0,0, 20, 20);
-  target.setStroke(color(0));
   xr = 0;
   yr = 0;
+
   /* setup framerate speed */
   frameRate(baseFrameRate);
-    f = createFont("Arial",16,true); // STEP 2 Create Font
+  f = createFont("Arial",16,true); // STEP 2 Create Font
   
   /* setup simulation thread to run at 1kHz */ 
   thread("SimulationThread");
 }
 /* end setup section ***************************************************************************************************/
-public void RandomPosition(int theValue) {
-      xr = random(-0.5f,0.5f);
-    yr = random(-0.5f,0.5f);
-}
-public void ResetIntegrator(int theValue) {
-    cumerrorx= 0;
-    cumerrory= 0;
-}
-public void ResetDevice(int theValue) {
-    widgetOne.device_set_parameters();
-
-}
-
-
-/* Keyboard inputs *****************************************************************************************************/
-
-/// Antoine: this is specific to qwerty keyboard layout, you may want to adapt
-
-public void keyPressed() {
-  if (key == 'q') {
-    P += 0.01f;
-  } else if (key == 'a') {
-    P -= 0.01f;
-  }
-  else if (key == 'w') {
-    I += 0.00001f;
-  }
-  else if (key == 's') {
-    I -= 0.00001f;
-  }
-  else if (key == 'e') {
-    D += 0.1f;
-  }
-  else if (key == 'd') {
-    D -= 0.1f;
-  }
-  else if (key == 'r') {
-    looptime += 100;
-  }
-  else if (key == 'f') {
-    looptime -= 100;
-  }
-    else if (key == 't') {
-    smoothing += 0.01f;
-  }
-  else if (key == 'g') {
-    smoothing -= 0.01f;
-  }
-  else if (key == ' ') {
-    cumerrorx= 0;
-    cumerrory= 0;
-  }
-  else if (key == 'i') {
-    widgetOne.device_set_parameters();
-  }
-  else if (key == 'b') {
-    xr = random(-0.5f,0.5f);
-    yr = random(-0.5f,0.5f);
-  }
-}
-
 
 /* draw section ********************************************************************************************************/
 public void draw(){
@@ -357,43 +250,23 @@ public void draw(){
     update_animation(angles.x*radsPerDegree, angles.y*radsPerDegree, posEE.x, posEE.y);    
   }
 }
+/* end draw section ****************************************************************************************************/
 
 int previousFrame = 0;
 int currentFrame = 0;
-float displacement = 0.01f;
-float radius = 0.25f;
-int sign = 1;
-int domainAdjustment = 4;
-
-public float waveFormValue(float x, int functionSign){
-  return Math.signum(functionSign * sin((PI * x)/2)) * sqrt(1 - (pow((acos(sin(PI*x - PI/2)))/PI, 2))); 
-}
 float tick = 0;
 float heartbeatValue = 0;
+
 public void AdvanceECG(){
-  /* xr += displacement;
-  println(xr);
-  if(xr  <= -0.5){
-    sign = 1;
-    displacement *= -1;
-  }
-  else if(xr  >= 1){
-    sign = -1;
-    displacement *= -1;
-  }
-
-  yr = waveFormValue(domainAdjustment*xr, sign) * radius;   */
-
-  tick += 0.01f;
- // heartbeatValue = (sin(((tick)*4)) + sin(tick*16)/4) * 3 * (-(floor(sin(tick * 2)) + 0.1)) * (1 - floor(mod(sin(tick/1.5), 2))); 
+  tick += 0.01f; 
   heartbeatValue = (sin(((tick)*4)) + sin(tick*16)/4) * 3 * (-(floor(sin(tick * 2)) + 0.1f)) * (1 - floor(sin(tick/1.5f % 2))); 
-
 }
-/* end draw section ****************************************************************************************************/
+
 
 int noforce = 0;
 long timetook = 0;
 long looptiming = 0;
+
 /* simulation section **************************************************************************************************/
 public void SimulationThread(){
 while(1==1) {
@@ -402,18 +275,16 @@ while(1==1) {
     iter+= 1;
     // we check the loop is running at the desired speed (with 10% tolerance)
     if(timesincelastloop >= looptime*1000*1.1f) {
-      float freq = 1.0f/timesincelastloop*1000000.0f;
-        //println("caution, freq droped to: "+freq + " kHz");        
+      float freq = 1.0f/timesincelastloop*1000000.0f;      
     }
     else if(iter >= 1000) {
       float freq = 1000.0f/(starttime-looptiming)*1000000.0f;
-       //println("loop running at "  + freq + " kHz");
        iter=0;
        looptiming=starttime;
     }
     
     currentFrame++;
-    if(currentFrame - previousFrame > 5){
+    if(currentFrame - previousFrame > 20/heartRate){
       previousFrame = currentFrame;      
       AdvanceECG(); 
 
@@ -434,20 +305,21 @@ while(1==1) {
 
       posEE.set(device_to_graphics(posEE)); 
       x_m = xr*300; 
-      y_m = yr*300+350;//mouseY;
+      y_m = yr*300+350;
       
- // Torques from difference in endeffector and setpoint, set gain, calculate force
+      // Torques from difference in endeffector and setpoint, set gain, calculate force
       float xE = pixelsPerMeter * posEE.x;
       float yE = pixelsPerMeter * posEE.y;
       long timedif = System.nanoTime()-oldtime;
 
       println(heartbeatValue);
-      float dist_X = heartbeatValue * random(-1,1); //x_m-xE;
+
+      float dist_X = heartbeatValue * random(-1,1);
       cumerrorx += dist_X*timedif*0.000000001f;
-      float dist_Y = heartbeatValue * random(-1,1); //y_m-yE;
+
+      float dist_Y = heartbeatValue * random(-1,1);
       cumerrory += dist_Y*timedif*0.000000001f;
-      //println(dist_Y*k + " " +dist_Y*k);
-      // println(timedif);
+
       if(timedif > 0) {
         buffx = (dist_X-oldex)/timedif*1000*1000;
         buffy = (dist_Y-oldey)/timedif*1000*1000;            
@@ -458,42 +330,31 @@ while(1==1) {
         oldey = dist_Y;
         oldtime=System.nanoTime();
       }
-    
-    // Forces are constrained to avoid moving too fast
-      P = random(0,2);
-  
-      fEE.x = constrain(P*dist_X,-4,4) + constrain(I*cumerrorx,-4,4) + constrain(D*diffx,-8,8);
-
       
+      fEE.x = constrain(P*dist_X,-4,4) + constrain(I*cumerrorx,-4,4) + constrain(D*diffx,-8,8);      
       fEE.y = constrain(P*dist_Y,-4,4) + constrain(I*cumerrory,-4,4) + constrain(D*diffy,-8,8); 
-
 
       if(noforce==1)
       {
         fEE.x=0.0f;
         fEE.y=0.0f;
       }
-    widgetOne.set_device_torques(graphics_to_device(fEE).array());
+      widgetOne.set_device_torques(graphics_to_device(fEE).array());
       /* end haptic wall force calculation */
       
     }
-    
-    
-    
+
     widgetOne.device_write_torques();
-  
-  
+    
     renderingForce = false;
     long timetook=System.nanoTime()-timetaken;
     if(timetook >= 1000000) {
-    //println("Caution, process loop took: " + timetook/1000000.0 + "ms");
     }
     else {
       while(System.nanoTime()-starttime < looptime*1000) {
-      //println("Waiting");
+      //NOP
       }
-    }
-    
+    }    
   }
 }
 
@@ -523,26 +384,13 @@ public void create_pantagraph(){
   
   endEffector = createShape(ELLIPSE, deviceOrigin.x, deviceOrigin.y, 2*rEEAni, 2*rEEAni);
   endEffector.setStroke(color(0));
-  strokeWeight(5);
-  
+  strokeWeight(5);  
 }
-
-
-public PShape create_wall(float x1, float y1, float x2, float y2){
-  x1 = pixelsPerMeter * x1;
-  y1 = pixelsPerMeter * y1;
-  x2 = pixelsPerMeter * x2;
-  y2 = pixelsPerMeter * y2;
-  
-  return createShape(LINE, deviceOrigin.x + x1, deviceOrigin.y + y1, deviceOrigin.x + x2, deviceOrigin.y+y2);
-}
-
-
 
 
 public void update_animation(float th1, float th2, float xE, float yE){
   background(255);
-    pushMatrix();
+  pushMatrix();
   float lAni = pixelsPerMeter * l;
   float LAni = pixelsPerMeter * L;
   
@@ -565,17 +413,15 @@ public void update_animation(float th1, float th2, float xE, float yE){
   shape(endEffector);
   popMatrix();
   arrow(xE,yE,fEE.x,fEE.y);
-  textFont(f,16);                  // STEP 3 Specify font to be used
-  fill(0);                         // STEP 4 Specify font color 
- 
-  x_m = xr*300+500; 
-      //println(x_m + " " + mouseX);")
-      y_m = yr*300+350;//mouseY;
+  textFont(f,16);
+  fill(0);
+
+  x_m = xr*300+500;       
+  y_m = yr*300+350;
+
   pushMatrix();
   translate(x_m, y_m);
-  shape(target);
-  popMatrix();
-  
+  popMatrix();  
 }
 
 
@@ -589,7 +435,7 @@ public PVector graphics_to_device(PVector graphicsFrame){
 }
 
 public void arrow(float x1, float y1, float x2, float y2) {
-    x2=x2*10.0f;
+  x2=x2*10.0f;
   y2=y2*10.0f;
   x1=x1+500;
   x2=-x2+x1;
