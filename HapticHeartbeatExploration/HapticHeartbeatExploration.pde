@@ -13,6 +13,16 @@ import static java.util.concurrent.TimeUnit.*;
 import java.util.concurrent.*;
 import controlP5.*;
 import java.lang.Math;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.*;
+import javax.sound.sampled.AudioFormat.Encoding;
+import javax.sound.sampled.UnsupportedAudioFileException;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+
+import javax.sound.sampled.*;
 /* end library imports *************************************************************************************************/  
 
 
@@ -116,13 +126,29 @@ PShape wall;
 PFont f;
 /* end elements definition *********************************************************************************************/ 
 
-
+int[] waveformAmplitudes;
+float[] waveformValues;
+boolean readWaveForm = false;
+int waveIndex = 0;
 /* setup section *******************************************************************************************************/
 void setup(){
   /* put setup code here, run once: */
   
   /* screen size definition */
   size(1000, 700);
+
+  try{
+
+    String filePath = "C:\\Users\\naomi\\Documents\\GIT\\ETS\\CanHaptics\\Project\\HapticHeartbeatExploration\\audio\\heartbeat_regular.wav";
+    File audioFile = new File(filePath);
+    waveformAmplitudes = getWavAmplitudes(audioFile);
+    waveformValues = processAmplitudes(waveformAmplitudes);
+    readWaveForm = true;
+  }
+  catch(UnsupportedAudioFileException | IOException ex){
+    ex.printStackTrace();
+
+  }
   
   /* GUI setup */
   smooth();
@@ -305,11 +331,17 @@ while(1==1) {
       
       fEE.x = constrain(P*dist_X,-4,4) + constrain(I*cumerrorx,-4,4) + constrain(D*diffx,-8,8);      
       fEE.y = constrain(P*dist_Y,-4,4) + constrain(I*cumerrory,-4,4) + constrain(D*diffy,-8,8); 
-
+      int renderWaveForm  = 1;
       if(noforce==1)
       {
         fEE.x=0.0;
         fEE.y=0.0;
+      }
+      else if(readWaveForm && renderWaveForm==1){
+        fEE.x = waveformValues[waveIndex % (waveformValues.length-1)] * 2; // OR fEE.x += waveFormValue;
+        fEE.y = 0.0; // OR nothing
+        waveIndex++;
+        //read values of wav file, try downsampling to 300-500 Hz (ie Audacity)      
       }
       widgetOne.set_device_torques(graphics_to_device(fEE).array());      
     }
@@ -427,3 +459,110 @@ void arrow(float x1, float y1, float x2, float y2) {
 
 
  
+
+
+/****  waveform calculation code *****/
+
+private static final double WAVEFORM_HEIGHT_COEFFICIENT = 1.3; // This fits the waveform to the swing node height
+
+
+private int[] getWavAmplitudes(File file) throws UnsupportedAudioFileException , IOException {
+				System.out.println("Calculting WAV amplitudes");
+				
+				//Get Audio input stream
+				try (AudioInputStream input = AudioSystem.getAudioInputStream(file)) {
+					AudioFormat baseFormat = input.getFormat();
+					
+					//Encoding
+					Encoding encoding = AudioFormat.Encoding.PCM_UNSIGNED;
+					float sampleRate = baseFormat.getSampleRate();
+					int numChannels = baseFormat.getChannels();
+					
+					AudioFormat decodedFormat = new AudioFormat(encoding, sampleRate, 16, numChannels, numChannels * 2, sampleRate, false);
+					int available = input.available();
+					
+					//Get the PCM Decoded Audio Input Stream
+					try (AudioInputStream pcmDecodedInput = AudioSystem.getAudioInputStream(decodedFormat, input)) {
+						final int BUFFER_SIZE = 4096; //this is actually bytes
+						
+						//Create a buffer
+						byte[] buffer = new byte[BUFFER_SIZE];
+						
+						//Now get the average to a smaller array
+						int maximumArrayLength = 100000;
+						int[] finalAmplitudes = new int[maximumArrayLength];
+						int samplesPerPixel = available / maximumArrayLength;
+						
+						//Variables to calculate finalAmplitudes array
+						int currentSampleCounter = 0;
+						int arrayCellPosition = 0;
+						float currentCellValue = 0.0f;
+						
+						//Variables for the loop
+						int arrayCellValue = 0;
+						
+						//Read all the available data on chunks
+						while (pcmDecodedInput.readNBytes(buffer, 0, BUFFER_SIZE) > 0)
+							for (int i = 0; i < buffer.length - 1; i += 2) {
+								
+								//Calculate the value
+								arrayCellValue = (int) ( ( ( ( ( buffer[i + 1] << 8 ) | buffer[i] & 0xff ) << 16 ) / 32767 ) * WAVEFORM_HEIGHT_COEFFICIENT );
+								
+								//Tricker
+								if (currentSampleCounter != samplesPerPixel) {
+									++currentSampleCounter;
+									currentCellValue += Math.abs(arrayCellValue);
+								} else {
+									//Avoid ArrayIndexOutOfBoundsException
+									if (arrayCellPosition != maximumArrayLength)
+										finalAmplitudes[arrayCellPosition] = finalAmplitudes[arrayCellPosition + 1] = (int) currentCellValue / samplesPerPixel;
+									
+									//Fix the variables
+									currentSampleCounter = 0;
+									currentCellValue = 0;
+									arrayCellPosition += 2;
+								}
+							}
+						
+						return finalAmplitudes;
+					} catch (Exception ex) {
+						ex.printStackTrace();
+					}
+				} catch (Exception ex) {
+					ex.printStackTrace();
+					
+				}
+				
+				//You don't want this to reach here...
+				return new int[1];
+			}
+
+
+      private float[] processAmplitudes(int[] sourcePcmData) {
+				System.out.println("Processing WAV amplitudes");
+				
+				//The width of the resulting waveform panel
+				int width = 2000;//waveVisualization.width;
+				float[] waveData = new float[width];
+				int samplesPerPixel = sourcePcmData.length / width;
+				
+				//Calculate
+				float nValue;
+				for (int w = 0; w < width; w++) {
+					
+					//For performance keep it here
+					int c = w * samplesPerPixel;
+					nValue = 0.0f;
+					
+					//Keep going
+					for (int s = 0; s < samplesPerPixel; s++) {
+						nValue += ( Math.abs(sourcePcmData[c + s]) / 65536.0f );
+					}
+					
+					//Set WaveData
+					waveData[w] = nValue / samplesPerPixel;
+				}
+				
+				System.out.println("Finished Processing amplitudes");
+				return waveData;
+			}
