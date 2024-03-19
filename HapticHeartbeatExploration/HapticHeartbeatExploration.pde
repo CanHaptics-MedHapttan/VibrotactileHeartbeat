@@ -338,8 +338,19 @@ while(1==1) {
         fEE.y=0.0;
       }
       else if(readWaveForm && renderWaveForm==1){
-        fEE.x = waveformValues[waveIndex % (waveformValues.length-1)] * 2; // OR fEE.x += waveFormValue;
-        fEE.y = 0.0; // OR nothing
+        //Option 1
+        //fEE.x = waveformValues[waveIndex % (waveformValues.length-1)] * 2; // OR fEE.x += waveFormValue;
+        //fEE.y = 0.0;
+
+        //Option 2
+        //fEE.x = waveformValues[waveIndex % (waveformValues.length-1)] * random(-1,1) * 2;//waveformValues[waveIndex % (waveformValues.length-1)] * 2; // OR fEE.x += waveFormValue;
+        //fEE.y = waveformValues[waveIndex % (waveformValues.length-1)] * random(-1,1) * 2; // OR nothing
+
+        //Option 3
+        fEE.y = waveformValues[waveIndex % (waveformValues.length-1)] * 2; // OR fEE.x += waveFormValue;
+        fEE.x = 0.0;
+
+
         waveIndex++;
         //read values of wav file, try downsampling to 300-500 Hz (ie Audacity)      
       }
