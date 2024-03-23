@@ -4,7 +4,7 @@
  * @author     Noami Catwell
  * @version    V1.0.0
  * @date       01-March-2024
- * @brief      PID Heartbeat
+ * @brief      Waveform rednering of heartbeat
  */
  
 /* library imports *****************************************************************************************************/ 
@@ -17,13 +17,9 @@ import java.lang.Math;
 import java.io.File;
 import java.io.IOException;
 import java.io.*;
-import javax.sound.sampled.AudioFormat.Encoding;
-import javax.sound.sampled.UnsupportedAudioFileException;
-import javax.sound.sampled.AudioInputStream;
-import javax.sound.sampled.AudioSystem;
 
 import javax.sound.sampled.*;
-import java.util.Arrays;
+import java.util.ArrayList;
 /* end library imports *************************************************************************************************/  
 
 
@@ -87,32 +83,8 @@ final int         worldPixelHeight                    = 650;
 
 float x_m,y_m;
 
-// used to compute the time difference between two loops for differentiation
-long oldtime = 0;
 // for changing update rate
 int iter = 0;
-
-/// PID stuff
-
-float P = 0.0;
-// for I
-float I = 0;
-float cumerrorx = 0;
-float cumerrory = 0;
-// for D
-float oldex = 0.0f;
-float oldey = 0.0f;
-float D = 0;
-
-//for exponential filter on differentiation
-float diffx = 0;
-float diffy = 0;
-float buffx = 0;
-float buffy = 0;
-float smoothing = 0.80;
-
-float xr = 0;
-float yr = 0;
 
 // checking everything run in less than 1ms
 long timetaken= 0;
@@ -121,15 +93,16 @@ long timetaken= 0;
 int looptime = 500;
 int heartRate = 5;
 
+float xr = 0;
+float yr = 0;
+int intensityMultiplier = 4;
 /* graphical elements */
 PShape pGraph, joint, endEffector;
 PShape wall;
 PFont f;
 /* end elements definition *********************************************************************************************/ 
-
-int[] waveformAmplitudes;
-float[] waveformValues;
-boolean readWaveForm = false;
+ArrayList<Float> samplesList;
+boolean renderWaveForm = false;
 int waveIndex = 0;
 /* setup section *******************************************************************************************************/
 void setup(){
@@ -138,68 +111,36 @@ void setup(){
   /* screen size definition */
   size(1000, 700);
 
-  try{
-
-    String filePath = "C:\\Users\\naomi\\Documents\\GIT\\ETS\\CanHaptics\\Project\\HapticHeartbeatExploration\\audio\\heartbeat_regular.wav";
-    File audioFile = new File(filePath);
-    waveformAmplitudes = getWavAmplitudes(audioFile);
-    waveformValues = processAmplitudes(waveformAmplitudes);
-    waveformValues = Arrays.copyOfRange(waveformValues, 0, 1290);
-    readWaveForm = true;
-  }
-  catch(UnsupportedAudioFileException | IOException ex){
-    //println("error in reading");
-    //ex.printStackTrace();
-
-  }
-
-  try{
-
-    String filePath = "C:\\Users\\naomi\\Documents\\GIT\\ETS\\CanHaptics\\Project\\HapticHeartbeatExploration\\audio\\waveform.txt";
-   
-    FileWriter myWriter = new FileWriter(filePath);
-    for(int i  =0; i < waveformValues.length; i++){
-      myWriter.write(waveformValues[i] + "\n");
-    }
-    
-    myWriter.close();
-  }
-  catch(IOException ex){
-    //println("error in writing");
-    //ex.printStackTrace();
-
-  }
+  // Read wave file's csv values into a floating point array list
+  String filePath = "C:\\Users\\naomi\\Documents\\GIT\\ETS\\CanHaptics\\Project\\HapticHeartbeatExploration\\data\\heartbeat-regular-1k-fp.csv";
   
+  Table table = loadTable(filePath, "header");
+
+  println(table.getRowCount() + " total rows in table");
+  samplesList = new ArrayList<Float>();
+  for (TableRow row : table.rows()) {
+    samplesList.add(row.getFloat("samples"));
+    renderWaveForm = true;
+  } 
+
   /* GUI setup */
   smooth();
 
   cp5 = new ControlP5(this);
     
-  cp5.addTextlabel("Prop")
-      .setText("Gain for P(roportional)")
+  cp5.addTextlabel("Intensity multiplier")
+      .setText("Intensity multiplier")
       .setPosition(0,250)
       .setColorValue(color(255,0,0))
       .setFont(createFont("Georgia",20))
       ;  
-    cp5.addSlider("P") 
+    cp5.addSlider("intensityMultiplier") 
       .setPosition(0,275)
       .setSize(200,20)
-      .setRange(0,2)
-      .setValue(1)
+      .setRange(0,10)
+      .setValue(4)
       ;
 
-    cp5.addTextlabel("Frame delay")
-      .setText("Heart rate")
-      .setPosition(0,375)
-      .setColorValue(color(255,0,0))
-      .setFont(createFont("Georgia",20))
-      ;  
-    cp5.addSlider("heartRate") 
-      .setPosition(10,400)
-      .setSize(200,20)
-      .setRange(1,20)
-      .setValue(5)
-      ;
     cp5.addTextlabel("Loop time")
       .setText("Loop time")
       .setPosition(0,420)
@@ -248,9 +189,6 @@ void setup(){
   /* create pantagraph graphics */
   create_pantagraph();
   
-  xr = 0;
-  yr = 0;
-
   /* setup framerate speed */
   frameRate(baseFrameRate);
   f = createFont("Arial",16,true); // STEP 2 Create Font
@@ -270,21 +208,9 @@ void draw(){
 }
 /* end draw section ****************************************************************************************************/
 
-int previousFrame = 0;
-int currentFrame = 0;
-float tick = 0;
-float heartbeatValue = 0;
-
-void AdvanceECG(){
-  tick += 0.01; 
-  heartbeatValue = (sin(((tick)*4)) + sin(tick*16)/4) * 3 * (-(floor(sin(tick * 2)) + 0.1)) * (1 - floor(sin(tick/1.5 % 2))); 
-}
-
-
 int noforce = 0;
 long timetook = 0;
 long looptiming = 0;
-int inverseDirection = 1;
 
 /* simulation section **************************************************************************************************/
 public void SimulationThread(){
@@ -301,16 +227,8 @@ while(1==1) {
        iter=0;
        looptiming=starttime;
     }
-    
-    currentFrame++;
-    if(currentFrame - previousFrame > 20/heartRate){
-      previousFrame = currentFrame;      
-      AdvanceECG(); 
 
-    }
-
-    timetaken=starttime;
-    
+    timetaken=starttime;    
     renderingForce = true;
     
     if(haplyBoard.data_available()){
@@ -321,74 +239,18 @@ while(1==1) {
       angles.set(widgetOne.get_device_angles());
     
       posEE.set(widgetOne.get_device_position(angles.array()));
-
       posEE.set(device_to_graphics(posEE)); 
-      x_m = xr*300; 
-      y_m = yr*300+350;
-      
-      // Torques from difference in endeffector and setpoint, set gain, calculate force
-      float xE = pixelsPerMeter * posEE.x;
-      float yE = pixelsPerMeter * posEE.y;
-      long timedif = System.nanoTime()-oldtime;
 
-      //println(heartbeatValue);
-
-      float dist_X = heartbeatValue * random(-1,1);
-      cumerrorx += dist_X*timedif*0.000000001;
-
-      float dist_Y = heartbeatValue * random(-1,1);
-      cumerrory += dist_Y*timedif*0.000000001;
-
-      if(timedif > 0) {
-        buffx = (dist_X-oldex)/timedif*1000*1000;
-        buffy = (dist_Y-oldey)/timedif*1000*1000;            
-
-        diffx = smoothing*diffx + (1.0-smoothing)*buffx;
-        diffy = smoothing*diffy + (1.0-smoothing)*buffy;
-        oldex = dist_X;
-        oldey = dist_Y;
-        oldtime=System.nanoTime();
-      }
-      
-      //fEE.x = constrain(P*dist_X,-4,4) + constrain(I*cumerrorx,-4,4) + constrain(D*diffx,-8,8);      
-      //fEE.y = constrain(P*dist_Y,-4,4) + constrain(I*cumerrory,-4,4) + constrain(D*diffy,-8,8); 
-      int renderWaveForm  = 1;
       if(noforce==1)
       {
         fEE.x=0.0;
         fEE.y=0.0;
       }
-      else if(readWaveForm && renderWaveForm==1){
-        //Option 1
-        //fEE.x = waveformValues[waveIndex % (waveformValues.length-1)] * 2; // OR fEE.x += waveFormValue;
-        //fEE.y = 0.0;
-
-        //Option 2
-        //fEE.x = waveformValues[waveIndex % (waveformValues.length-1)] * random(-1,1) * 2;//waveformValues[waveIndex % (waveformValues.length-1)] * 2; // OR fEE.x += waveFormValue;
-        //fEE.y = waveformValues[waveIndex % (waveformValues.length-1)] * random(-1,1) * 2; // OR nothing
-
-        //Option 3
-       /*  if(waveIndex > 10000){
-          waveIndex = 0;
-          println("start");
-        }  */
-
-        //if(waveIndex < waveformValues.length){
-          float val = (waveformValues[waveIndex % (waveformValues.length-1)]);
-          /* if(val < 1){
-            val = -1 * val;
-          } */
-          //fEE.y = inverseDirection * (waveformValues[waveIndex % (waveformValues.length-1)] * 2);
-          fEE.y = inverseDirection * val;
-          //println(val);
-        //}
-         // OR fEE.x += waveFormValue;
+      else if(renderWaveForm){
+        // Send values of wavefile csv to Haply force rendering output
+        fEE.y =  (samplesList.get(waveIndex % (samplesList.size()-1)) * intensityMultiplier);        
         fEE.x = 0.0;
-        //inverseDirection *= -1;
-
-
-        waveIndex++;
-        //read values of wav file, try downsampling to 300-500 Hz (ie Audacity)      
+        waveIndex++;        
       }
       widgetOne.set_device_torques(graphics_to_device(fEE).array());      
     }
@@ -501,118 +363,3 @@ void arrow(float x1, float y1, float x2, float y2) {
 } 
 
 /* end helper functions section ****************************************************************************************/
-
-
-
-
- 
-
-
-/****  waveform calculation code *****/
-
-private static final double WAVEFORM_HEIGHT_COEFFICIENT = 1.3; // This fits the waveform to the swing node height
-
-
-private int[] getWavAmplitudes(File file) throws UnsupportedAudioFileException , IOException {
-  System.out.println("Calculting WAV amplitudes");
-  
-  //Get Audio input stream
-  try (AudioInputStream input = AudioSystem.getAudioInputStream(file)) {
-    AudioFormat baseFormat = input.getFormat();
-    
-    //Encoding
-    Encoding encoding = AudioFormat.Encoding.PCM_UNSIGNED;
-    float sampleRate = baseFormat.getSampleRate();
-    int numChannels = baseFormat.getChannels();
-    
-    AudioFormat decodedFormat = new AudioFormat(encoding, sampleRate, 16, numChannels, numChannels * 2, sampleRate, false);
-    int available = input.available();
-    
-    //Get the PCM Decoded Audio Input Stream
-    try (AudioInputStream pcmDecodedInput = AudioSystem.getAudioInputStream(decodedFormat, input)) {
-      final int BUFFER_SIZE = 4096; //this is actually bytes
-      
-      //Create a buffer
-      byte[] buffer = new byte[BUFFER_SIZE];
-      
-      //Now get the average to a smaller array
-      int maximumArrayLength = 100000;
-      int[] finalAmplitudes = new int[maximumArrayLength];
-      int samplesPerPixel = available / maximumArrayLength;
-      
-      //Variables to calculate finalAmplitudes array
-      int currentSampleCounter = 0;
-      int arrayCellPosition = 0;
-      float currentCellValue = 0.0f;
-      
-      //Variables for the loop
-      int arrayCellValue = 0;
-      
-      //Read all the available data on chunks
-      while (pcmDecodedInput.readNBytes(buffer, 0, BUFFER_SIZE) > 0)
-        for (int i = 0; i < buffer.length - 1; i += 2) {
-          
-          //Calculate the value
-          arrayCellValue = (int) ( ( ( ( ( buffer[i + 1] << 8 ) | buffer[i] & 0xff ) << 16 ) / 32767 ) * WAVEFORM_HEIGHT_COEFFICIENT );
-          
-          //Tricker
-          if (currentSampleCounter != samplesPerPixel) {
-            ++currentSampleCounter;
-            currentCellValue += Math.abs(arrayCellValue);
-          } else {
-            //Avoid ArrayIndexOutOfBoundsException
-            if (arrayCellPosition != maximumArrayLength)
-              finalAmplitudes[arrayCellPosition] = finalAmplitudes[arrayCellPosition + 1] = (int) currentCellValue / samplesPerPixel;
-            
-            //Fix the variables
-            currentSampleCounter = 0;
-            currentCellValue = 0;
-            arrayCellPosition += 2;
-          }
-        }
-      
-      return finalAmplitudes;
-    } catch (Exception ex) {
-      ex.printStackTrace();
-    }
-  } catch (Exception ex) {
-    ex.printStackTrace();
-    
-  }
-  
-  //You don't want this to reach here...
-  return new int[1];
-}
-
-
-private float[] processAmplitudes(int[] sourcePcmData) {
-  System.out.println("Processing WAV amplitudes");
-  
-  //The width of the resulting waveform panel
-  int width = 2000;//waveVisualization.width;
-  float[] waveData = new float[width];
-  println(sourcePcmData.length);
-  println(width);
-  int samplesPerPixel = sourcePcmData.length / width;
-  println(samplesPerPixel);
-  //Calculate
-  float nValue;
-  for (int w = 0; w < width; w++) {
-    
-    //For performance keep it here
-    int c = w * samplesPerPixel;    
-    nValue = 0.0f;
-    
-    //Keep going
-    for (int s = 0; s < samplesPerPixel; s++) {
-      nValue += ( Math.abs(sourcePcmData[c + s]) / 65536.0f );
-    }
-    
-    //Set WaveData
-    //print(samplesPerPixel + " | ");
-    waveData[w] = nValue / samplesPerPixel;
-  }
-  
-  System.out.println("Finished Processing amplitudes");
-  return waveData;
-}
