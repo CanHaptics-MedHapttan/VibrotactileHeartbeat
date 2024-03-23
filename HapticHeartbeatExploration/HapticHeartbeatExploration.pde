@@ -3,7 +3,7 @@
  * @file       HapticHeartbeatExploration.pde
  * @author     Noami Catwell
  * @version    V1.0.0
- * @date       01-March-2024
+ * @date       23-March-2024
  * @brief      Waveform rednering of heartbeat
  */
  
@@ -12,13 +12,6 @@ import processing.serial.*;
 import static java.util.concurrent.TimeUnit.*;
 import java.util.concurrent.*;
 import controlP5.*;
-import java.lang.Math;
-
-import java.io.File;
-import java.io.IOException;
-import java.io.*;
-
-import javax.sound.sampled.*;
 import java.util.ArrayList;
 /* end library imports *************************************************************************************************/  
 
@@ -96,6 +89,7 @@ int heartRate = 5;
 float xr = 0;
 float yr = 0;
 int intensityMultiplier = 4;
+
 /* graphical elements */
 PShape pGraph, joint, endEffector;
 PShape wall;
@@ -188,7 +182,7 @@ void setup(){
   
   /* create pantagraph graphics */
   create_pantagraph();
-  
+
   /* setup framerate speed */
   frameRate(baseFrameRate);
   f = createFont("Arial",16,true); // STEP 2 Create Font
